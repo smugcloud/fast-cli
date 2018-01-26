@@ -1,17 +1,21 @@
 package main
 
-import "os"
-import "fmt"
-import "io"
-import "net/http"
-import "strconv"
-import "time"
+import (
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
 
-import "github.com/spf13/cobra"
-import "github.com/gesquive/cli"
-import "github.com/gesquive/fast-cli/fast"
-import "github.com/gesquive/fast-cli/format"
-import "github.com/gesquive/fast-cli/meters"
+	"github.com/gesquive/cli"
+	"github.com/gesquive/fast-cli/fast"
+	"github.com/gesquive/fast-cli/format"
+	"github.com/gesquive/fast-cli/meters"
+	client "github.com/influxdata/influxdb/client/v2"
+	"github.com/spf13/cobra"
+)
 
 var version = "v0.2.10"
 var dirty = ""
@@ -22,6 +26,8 @@ var logDebug bool
 var notHTTPS bool
 var simpleProgress bool
 var showVersion bool
+
+const MyDB = "speed"
 
 //RootCmd is the only command
 var RootCmd = &cobra.Command{
@@ -158,6 +164,8 @@ func calculateBandwidth(urls []string) (err error) {
 					format.Percent(primaryBandwidthReader.BytesRead(), bytesToRead))
 				fmt.Printf("  \n")
 				fmt.Printf("Completed in %.1f seconds\n", bandwidthMeter.Duration().Seconds())
+				writeInflux(bandwidthMeter.Bandwidth())
+
 			} else {
 				fmt.Printf("%s\n", format.BitsPerSec(bandwidthMeter.Bandwidth()))
 			}
@@ -169,6 +177,42 @@ func calculateBandwidth(urls []string) (err error) {
 					format.Percent(primaryBandwidthReader.BytesRead(), bytesToRead))
 			}
 		}
+	}
+}
+
+func writeInflux(bps float64) {
+	// Create a new HTTPClient
+	c, err := client.NewHTTPClient(client.HTTPConfig{
+		Addr: "http://localhost:8086",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create a new point batch
+	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+		Database:  MyDB,
+		Precision: "s",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create a point and add to batch
+	tags := map[string]string{"tag": "download-speed"}
+	fields := map[string]interface{}{
+		"speed": bps * 8,
+	}
+
+	pt, err := client.NewPoint("download", tags, fields, time.Now())
+	if err != nil {
+		log.Fatal(err)
+	}
+	bp.AddPoint(pt)
+
+	// Write the batch
+	if err := c.Write(bp); err != nil {
+		log.Fatal(err)
 	}
 }
 
