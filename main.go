@@ -13,7 +13,7 @@ import (
 	"github.com/gesquive/fast-cli/fast"
 	"github.com/gesquive/fast-cli/format"
 	"github.com/gesquive/fast-cli/meters"
-	client "github.com/influxdata/influxdb/client/v2"
+	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/spf13/cobra"
 )
 
